@@ -18,7 +18,7 @@ La API SHALL permitir crear una cuenta mediante `POST /api/v1/auth/signup` con `
 
 #### Scenario: Registro correcto sin nombre
 
-- **WHEN** se envía un registro válido con `fullName: null`
+- **WHEN** se envía un registro válido con `fullName: null` o `fullName: ""`
 - **THEN** la respuesta tiene estado 200 y `data.user.fullName` es `null`
 
 ### Requirement: Validación del registro
@@ -99,7 +99,7 @@ La API SHALL responder con estado 400 y `{ errors: [{ message: "Invalid user cre
 
 ### Requirement: Acceso autenticado por token
 
-Las rutas bajo `/api/v1/account/` SHALL exigir una cabecera `Authorization: Bearer <token>` con un token vigente, y SHALL responder con estado 401 y `{ errors: [{ message: "Unauthorized access" }] }` cuando falte, sea desconocido o haya sido revocado. Las respuestas SHALL ser JSON independientemente de la cabecera `Accept` de la petición.
+Las rutas bajo `/api/v1/account/` SHALL exigir una cabecera `Authorization: Bearer <token>` con un token vigente, y SHALL responder con estado 401 y `{ errors: [{ message: "Unauthorized access" }] }` cuando falte, sea desconocido o haya sido revocado. Los tokens no caducan por tiempo: solo dejan de valer al revocarse. Todas las respuestas de la API SHALL ser JSON independientemente de la cabecera `Accept` de la petición.
 
 #### Scenario: Sin token
 
@@ -127,7 +127,7 @@ La API SHALL devolver, en `GET /api/v1/account/profile` con un token vigente, es
 
 ### Requirement: Iniciales del usuario
 
-La API SHALL calcular `initials` en mayúsculas así: si hay `fullName`, con la primera letra de la primera y la segunda palabra; si no hay `fullName`, con la primera letra de la parte local del email y la primera del dominio; y si solo hay una palabra, con sus dos primeras letras.
+La API SHALL calcular `initials` en mayúsculas troceando `fullName` por cada espacio (o, sin `fullName`, el email por la `@`): si los dos primeros trozos no están vacíos, con la primera letra de cada uno; si no, con hasta dos primeras letras del primer trozo, que puede quedar vacío.
 
 #### Scenario: Nombre de varias palabras
 
@@ -143,6 +143,11 @@ La API SHALL calcular `initials` en mayúsculas así: si hay `fullName`, con la 
 
 - **WHEN** la cuenta no tiene `fullName` y su email es "spec@x.io"
 - **THEN** `initials` es "SX"
+
+#### Scenario: Espacios repetidos o iniciales
+
+- **WHEN** la cuenta se registra en la API con `fullName` "Ada  Lovelace" (dos espacios), o con " Ada"
+- **THEN** `initials` es "AD" en el primer caso y la cadena vacía en el segundo
 
 ### Requirement: Cierre de sesión en la API
 
@@ -237,8 +242,8 @@ La aplicación web SHALL mostrar en `/profile` una tarjeta con las iniciales del
 
 #### Scenario: Ver el perfil
 
-- **WHEN** una persona con sesión, registrada el 28 de octubre de 2026 con nombre "Ada Lovelace", abre `/profile`
-- **THEN** ve "AL", "Ada Lovelace", su email y "Miembro desde 28 de octubre de 2026"
+- **WHEN** una persona con sesión y nombre "Ada Lovelace" abre `/profile`
+- **THEN** ve "AL", "Ada Lovelace", su email y "Miembro desde" seguido de su fecha de alta en formato largo en castellano (p. ej. "28 de octubre de 2026"), según la zona horaria de su navegador
 
 ### Requirement: Cierre de sesión en la aplicación web
 
@@ -254,6 +259,7 @@ Al pulsar "Cerrar sesión", la aplicación web SHALL cerrar la sesión local de 
 
 - **WHEN** la persona pulsa "Cerrar sesión" con el backend apagado
 - **THEN** igualmente pasa a ver la pantalla de login sin sesión
+- **AND** el token que tenía sigue siendo válido en la API, porque nunca llegó a revocarse
 
 ### Requirement: Persistencia de la sesión entre recargas
 
@@ -275,6 +281,12 @@ La aplicación web SHALL conservar la sesión al recargar la página o volver a 
 - **WHEN** la persona recarga la página con el backend apagado
 - **THEN** acaba en `/login` con el aviso "No se pudo conectar con el servidor. Comprueba que el backend está arrancado."
 - **AND** al volver a recargar con el backend ya arrancado recupera su sesión sin volver a introducir credenciales
+
+#### Scenario: Error del servidor al recargar
+
+- **WHEN** la persona recarga la página y la API responde con un error del servidor (5xx)
+- **THEN** acaba en `/login` con el aviso "Algo ha ido mal en el servidor. Inténtalo de nuevo en un momento."
+- **AND** al volver a recargar con la API ya sana recupera su sesión
 
 #### Scenario: El aviso de sesión perdida persiste hasta entrar
 
